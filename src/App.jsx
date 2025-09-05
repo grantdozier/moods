@@ -40,24 +40,39 @@ export default function App() {
   }
 
   useEffect(() => {
-    // remove old magic-link/password reset hashes if they exist
+    // Strip old auth hash (magic link / resets)
     if (window.location.hash && window.location.hash.includes('access_token')) {
       const clean = window.location.origin + import.meta.env.BASE_URL;
       window.history.replaceState(null, '', clean);
     }
 
+    // Initial user
     supabase.auth.getUser().then(async ({ data }) => {
       const u = data.user ?? null;
       setUser(u);
       if (u) await ensureAllowed();
     });
-    
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) await ensureAllowed();
+
+    // React to auth events
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+      switch (event) {
+        case 'SIGNED_IN':
+        case 'TOKEN_REFRESHED':
+          setUser(session?.user ?? null);
+          if (session?.user) await ensureAllowed();
+          break;
+
+        case 'SIGNED_OUT':
+          setUser(null);
+          setIsAllowed(false);
+          setProjects([]);
+          break;
+
+        default:
+          setUser(session?.user ?? null);
+      }
     });
-    
+
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -85,21 +100,33 @@ export default function App() {
   };
 
   const signOut = async () => {
-    // revoke all sessions for this user, not just this tab
+    // 1) Ask Supabase to revoke all sessions for this user
     const { error } = await supabase.auth.signOut({ scope: 'global' });
     if (error) {
-      console.error("Error signing out:", error);
+      console.error('Error signing out:', error);
       alert(error.message);
       return;
     }
-    // clear local UI state
+
+    // 2) Belt-and-suspenders: remove any lingering sb-*-auth-token key
+    try {
+      const ref = new URL(import.meta.env.VITE_SUPABASE_URL).host.split('.')[0]; // e.g. pblvktlahxpalusyvoeq
+      const key = `sb-${ref}-auth-token`;
+      localStorage.removeItem(key);
+      // also clear any legacy keys
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) localStorage.removeItem(k);
+      });
+    } catch { /* ignore */ }
+
+    // 3) Reset local UI state (defensive; the SIGNED_OUT event will also do this)
     setUser(null);
     setIsAllowed(false);
     setProjects([]);
 
-    // remove any leftover auth hash or query params and land at the app base
-    const cleanUrl = window.location.origin + import.meta.env.BASE_URL;
-    window.history.replaceState(null, '', cleanUrl);
+    // 4) Land on a clean URL at your app base
+    const cleanUrl = window.location.origin + import.meta.env.BASE_URL; // https://grantdozier.github.io/moods/
+    window.location.replace(cleanUrl);
   };
 
   const load = async () => {
