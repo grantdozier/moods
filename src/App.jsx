@@ -69,6 +69,19 @@ export default function App() {
     }
   };
 
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setIsAllowed(false);
+      setProjects([]);
+      console.log("User signed out successfully");
+    } catch (error) {
+      console.error("Error signing out:", error);
+      alert("Error signing out. Please try again.");
+    }
+  };
+
   const load = async () => {
     const { data, error } = await supabase
       .from("projects")
@@ -229,16 +242,7 @@ export default function App() {
               <strong>Logged in as:</strong> {user.email}
             </div>
             <button 
-              onClick={async () => {
-                try {
-                  await supabase.auth.signOut();
-                  setUser(null);
-                  setIsAllowed(false);
-                } catch (error) {
-                  console.error("Error signing out:", error);
-                  alert("Error signing out. Please try again.");
-                }
-              }}
+              onClick={signOut}
               style={{ 
                 background: "#f44336", 
                 color: "white", 
