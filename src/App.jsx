@@ -11,21 +11,28 @@ export default function App() {
     email: "",
     password: ""
   });
+  
+  // Track sign out state to prevent loops
+  let signingOut = false;
 
   async function ensureAllowed() {
+    if (signingOut) return false;
+    
     const { data, error } = await supabase
       .from('allowed_emails')
       .select('email')
       .maybeSingle();
 
     if (error) {
-      console.error(error);
+      console.error('allowed_emails check failed:', error);
       alert('Temporary issue verifying access.');
       return false;
     }
     if (!data) {
       alert('Access denied. Contact the admin for access.');
-      await supabase.auth.signOut();
+      signingOut = true;
+      await supabase.auth.signOut({ scope: 'global' });
+      signingOut = false;
       return false;
     }
     setIsAllowed(true);
@@ -33,16 +40,24 @@ export default function App() {
   }
 
   useEffect(() => {
+    // remove old magic-link/password reset hashes if they exist
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      const clean = window.location.origin + import.meta.env.BASE_URL;
+      window.history.replaceState(null, '', clean);
+    }
+
     supabase.auth.getUser().then(async ({ data }) => {
       const u = data.user ?? null;
       setUser(u);
       if (u) await ensureAllowed();
     });
+    
     const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
       const u = session?.user ?? null;
       setUser(u);
       if (u) await ensureAllowed();
     });
+    
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -70,16 +85,21 @@ export default function App() {
   };
 
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      setIsAllowed(false);
-      setProjects([]);
-      console.log("User signed out successfully");
-    } catch (error) {
+    // revoke all sessions for this user, not just this tab
+    const { error } = await supabase.auth.signOut({ scope: 'global' });
+    if (error) {
       console.error("Error signing out:", error);
-      alert("Error signing out. Please try again.");
+      alert(error.message);
+      return;
     }
+    // clear local UI state
+    setUser(null);
+    setIsAllowed(false);
+    setProjects([]);
+
+    // remove any leftover auth hash or query params and land at the app base
+    const cleanUrl = window.location.origin + import.meta.env.BASE_URL;
+    window.history.replaceState(null, '', cleanUrl);
   };
 
   const load = async () => {
@@ -130,7 +150,7 @@ export default function App() {
           fontWeight: 600,
           color: "#222"
         }}>
-          Moods Admin
+          Admin Portal
         </h1>
       </div>
 
