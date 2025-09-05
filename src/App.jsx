@@ -16,7 +16,12 @@ export default function App() {
   const signIn = async () => {
     const email = prompt("Email for magic link:");
     if (!email) return;
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    // Use absolute URL for redirect to ensure it works with GitHub Pages
+    const redirectTo = 'https://grantdozier.github.io/moods/';
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo }
+    });
     if (error) alert(error.message);
     else alert("Check your email for the sign-in link.");
   };
