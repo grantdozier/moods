@@ -5,7 +5,7 @@ import App from "./App.jsx";
 import { supabase } from "./lib/supabase";
 
 // Handle auth callback
-const handleAuthCallback = () => {
+const HandleAuthCallback = () => {
   useEffect(() => {
     // Check if we have a hash in the URL (auth callback)
     const hash = window.location.hash;
@@ -26,7 +26,7 @@ const handleAuthCallback = () => {
 const router = createBrowserRouter([
   { 
     path: "/", 
-    element: <handleAuthCallback /> 
+    element: <HandleAuthCallback /> 
   }
 ], {
   basename: "/moods"
